@@ -40,15 +40,15 @@
       background: #1b1b1b;
       border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
     }
 
     canvas {
-      max-width: 100%;
-      max-height: 100%;
       display: block;
       background: white;
       border-radius: 10px;
+      max-width: 100%;
+      max-height: 100%;
     }
 
     .side-btn {
@@ -59,7 +59,7 @@
       height: 120px;
       border: none;
       border-radius: 16px;
-      background: rgba(255,255,255,0.1);
+      background: rgba(255, 255, 255, 0.1);
       color: white;
       font-size: 32px;
       cursor: pointer;
@@ -70,7 +70,7 @@
     }
 
     .side-btn:hover {
-      background: rgba(255,255,255,0.2);
+      background: rgba(255, 255, 255, 0.2);
     }
 
     .side-btn:disabled {
@@ -94,7 +94,7 @@
       z-index: 30;
       padding: 8px 16px;
       border-radius: 999px;
-      background: rgba(0,0,0,0.45);
+      background: rgba(0, 0, 0, 0.45);
       font-size: 15px;
       letter-spacing: 0.3px;
       backdrop-filter: blur(4px);
@@ -108,7 +108,7 @@
       z-index: 30;
       padding: 8px 14px;
       border-radius: 999px;
-      background: rgba(0,0,0,0.35);
+      background: rgba(0, 0, 0, 0.35);
       font-size: 13px;
       color: #ddd;
       backdrop-filter: blur(4px);
@@ -126,12 +126,13 @@
       z-index: 25;
       font-size: 16px;
       color: #ff8a8a;
-      background: rgba(0,0,0,0.45);
+      background: rgba(0, 0, 0, 0.45);
       padding: 12px 16px;
       border-radius: 12px;
       max-width: 80%;
       text-align: center;
       line-height: 1.5;
+      white-space: pre-line;
     }
   </style>
 </head>
@@ -144,7 +145,7 @@
       <div id="errorBox" class="error" style="display:none;"></div>
       <div id="pageInfo" class="top-info">페이지 - / -</div>
       <canvas id="pdfCanvas"></canvas>
-      <div class="bottom-help">← → 방향키 또는 버튼으로 페이지 이동</div>
+      <div class="bottom-help">← → 방향키 또는 옆 버튼으로 페이지 이동</div>
     </div>
 
     <button id="nextBtn" class="side-btn next-btn" aria-label="다음 페이지">›</button>
@@ -156,7 +157,8 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       "https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.296/build/pdf.worker.min.mjs";
 
-    const url = "https://github.com/choimagon/ppt_test/blob/main/my.pdf";
+    // GitHub raw PDF 주소
+    const url = "https://raw.githubusercontent.com/choimagon/ppt_test/main/my.pdf";
 
     const canvas = document.getElementById("pdfCanvas");
     const ctx = canvas.getContext("2d");
@@ -170,7 +172,6 @@
     let pageNum = 1;
     let isRendering = false;
     let pendingPage = null;
-    let currentScale = 1;
 
     function showError(message) {
       errorBox.style.display = "block";
@@ -187,24 +188,27 @@
     async function calculateScale(page) {
       const viewport = page.getViewport({ scale: 1 });
 
-      const containerWidth = window.innerWidth - 180;
-      const containerHeight = window.innerHeight - 60;
+      const availableWidth = window.innerWidth - 180;
+      const availableHeight = window.innerHeight - 60;
 
-      const widthScale = containerWidth / viewport.width;
-      const heightScale = containerHeight / viewport.height;
+      const widthScale = availableWidth / viewport.width;
+      const heightScale = availableHeight / viewport.height;
 
       return Math.min(widthScale, heightScale);
     }
 
     async function renderPage(num) {
+      if (!pdfDoc) return;
+
       isRendering = true;
       loading.style.display = "block";
+      errorBox.style.display = "none";
 
       try {
         const page = await pdfDoc.getPage(num);
-        currentScale = await calculateScale(page);
+        const scale = await calculateScale(page);
+        const viewport = page.getViewport({ scale });
 
-        const viewport = page.getViewport({ scale: currentScale });
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
 
@@ -215,11 +219,11 @@
 
         await page.render(renderContext).promise;
 
-        loading.style.display = "none";
         pageNum = num;
         updateButtons();
+        loading.style.display = "none";
       } catch (err) {
-        showError("페이지 렌더링 중 오류가 발생했습니다: " + err.message);
+        showError("페이지 렌더링 중 오류가 발생했습니다.\n" + err.message);
       } finally {
         isRendering = false;
 
@@ -243,7 +247,7 @@
     }
 
     function goPrevPage() {
-      if (pageNum <= 1) return;
+      if (!pdfDoc || pageNum <= 1) return;
       queueRenderPage(pageNum - 1);
     }
 
@@ -259,6 +263,7 @@
       if (e.key === "ArrowLeft") {
         goPrevPage();
       } else if (e.key === "ArrowRight" || e.key === " ") {
+        e.preventDefault();
         goNextPage();
       }
     });
@@ -277,9 +282,11 @@
         renderPage(pageNum);
       } catch (err) {
         showError(
-          "PDF를 열 수 없습니다.\n" +
-          "1) my.pdf가 index.html과 같은 폴더에 있는지\n" +
-          "2) 로컬 서버로 실행했는지 확인하세요.\n\n" +
+          "PDF를 불러오지 못했습니다.\n\n" +
+          "확인할 것:\n" +
+          "1. GitHub 저장소가 public 인지\n" +
+          "2. 파일명이 정확히 my.pdf 인지\n" +
+          "3. raw 주소가 맞는지\n\n" +
           "오류: " + err.message
         );
       }
